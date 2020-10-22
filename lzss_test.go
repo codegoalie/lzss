@@ -18,3 +18,10 @@ func TestDoubleString(t *testing.T) {
 	actual := Encode(in)
 	assert.Equal(t, expected, actual, "Encode replaces one repetition")
 }
+
+func TestOneToken(t *testing.T) {
+	expected := "This stringer and that <16,6>"
+	in := "This stringer and that stringer"
+	actual := Encode(in)
+	assert.Equal(t, expected, actual, "Encode replaces one repetition")
+}
