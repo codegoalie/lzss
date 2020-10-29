@@ -2,7 +2,6 @@ package lzss
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -23,13 +22,14 @@ func Encode(in string) string {
 		seen, ok := mem[char]
 		mem[char] = append(mem[char], pos)
 		if !ok {
-			fmt.Println("never seen", string(char), pos, seen, activeChains, length)
+			// fmt.Println("never seen", string(char), pos, seen, activeChains, length)
 			out.WriteString(orig.String())
-			orig = strings.Builder{}
+			orig.Reset()
 			activeChains = []int{}
 			length = 0
 			continue
 		}
+		// fmt.Println("seen", string(char), pos, seen, activeChains, length)
 
 		if len(activeChains) < 1 {
 			activeChains = seen
@@ -38,34 +38,50 @@ func Encode(in string) string {
 			continue
 		}
 
-		newChains := []int{}
-		fmt.Println("cmp", activeChains, seen)
+		newChains := make(map[int]struct{})
+		// fmt.Println("cmp", activeChains, seen)
 		for _, seenAt := range seen {
 			for _, startAt := range activeChains {
+				// fmt.Printf("%s == %s", string(in[seenAt]), string(in[startAt+length]))
 				if in[seenAt] == in[startAt+length] {
-					newChains = append(newChains, startAt)
+					// fmt.Printf(" used")
+					newChains[startAt] = struct{}{}
 				}
+				// fmt.Println()
 			}
 		}
-		fmt.Println("starts", activeChains, newChains)
+		// fmt.Println("chains", activeChains, newChains)
 		if len(newChains) > 0 {
-			activeChains = newChains
+			chainSlice := make([]int, len(newChains))
+			i := 0
+			for startAt := range newChains {
+				chainSlice[i] = startAt
+				i++
+			}
+			activeChains = chainSlice
 			length++
-			fmt.Println("keep going", string(char), pos, seen, activeChains, length)
+			// fmt.Println("keep going", string(char), pos, seen, activeChains, length)
+			// fmt.Println()
 			continue
 		}
 
-		token := fmt.Sprintf("<%d,%d>", start-activeChains[len(activeChains)-1], length)
-		if len(token) < length {
-			fmt.Println("using token", string(char), pos, seen, activeChains, length)
-			out.WriteString(token)
-		} else {
-			fmt.Println("using orig", string(char), pos, seen, activeChains, length)
-			out.WriteString(orig.String())
+		if len(seen) > 0 {
+			origs := orig.String()
+			out.WriteString(tokenOrOrig(start-activeChains[len(activeChains)-1], length, origs[:len(origs)-1]))
+			orig.Reset()
+			orig.WriteByte(char)
+			activeChains = seen
+			start = pos
+			length = 1
+			// fmt.Println("stopped, but started", origs[:len(origs)-1], orig.String())
+			continue
 		}
 
-		fmt.Println("reset")
-		orig = strings.Builder{}
+		out.WriteString(tokenOrOrig(start-activeChains[len(activeChains)-1], length, orig.String()))
+
+		// fmt.Println("reset")
+		// fmt.Println()
+		orig.Reset()
 		activeChains = []int{}
 		length = 0
 
@@ -89,22 +105,28 @@ func Encode(in string) string {
 		// mem[char] = pos
 	}
 	if length > 0 {
-		token := fmt.Sprintf("<%d,%d>", start-activeChains[len(activeChains)-1], length)
-		if len(token) < length {
-			out.WriteString(token)
-		} else {
-			out.WriteString(orig.String())
-		}
+		out.WriteString(tokenOrOrig(start-activeChains[len(activeChains)-1], length, orig.String()))
 	}
 
-	for char, loc := range mem {
-		locs := make([]string, len(loc))
-		for i, pos := range loc {
-			locs[i] = strconv.Itoa(pos)
-		}
-		fmt.Printf("%s: %s\n", string(char), strings.Join(locs, ","))
-		// fmt.Printf("%s: %d\n", string(char), loc)
-	}
+	// for char, loc := range mem {
+	// 	locs := make([]string, len(loc))
+	// 	for i, pos := range loc {
+	// 		locs[i] = strconv.Itoa(pos)
+	// 	}
+	// 	fmt.Printf("%s: %s\n", string(char), strings.Join(locs, ","))
+	// 	// fmt.Printf("%s: %d\n", string(char), loc)
+	// }
 	// fmt.Printf("%+v\n", mem)
 	return out.String()
+}
+
+func tokenOrOrig(start, length int, orig string) string {
+	token := fmt.Sprintf("<%d,%d>", start, length)
+	if len(token) < length {
+		// fmt.Println("using token")
+		return token
+	}
+
+	// fmt.Println("using orig")
+	return orig
 }
